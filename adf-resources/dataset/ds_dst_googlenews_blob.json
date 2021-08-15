@@ -1,0 +1,71 @@
+{
+	"name": "ds_dst_googlenews_blob",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_adlsgen2_blob",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "googlenews_raw.json",
+				"folderPath": "raw",
+				"fileSystem": "googlenews"
+			}
+		},
+		"schema": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string"
+				},
+				"totalResults": {
+					"type": "integer"
+				},
+				"articles": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"source": {
+								"type": "object",
+								"properties": {
+									"id": {
+										"type": "null"
+									},
+									"name": {
+										"type": "string"
+									}
+								}
+							},
+							"author": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"url": {
+								"type": "string"
+							},
+							"urlToImage": {
+								"type": "string"
+							},
+							"publishedAt": {
+								"type": "string"
+							},
+							"content": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

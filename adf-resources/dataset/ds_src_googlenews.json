@@ -1,0 +1,27 @@
+{
+	"name": "ds_src_googlenews",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_googleapi",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"url": {
+				"type": "string"
+			},
+			"apikey": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"typeProperties": {
+			"relativeUrl": {
+				"value": "@concat(dataset().url,dataset().apikey)",
+				"type": "Expression"
+			}
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

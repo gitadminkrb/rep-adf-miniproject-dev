@@ -1,0 +1,14 @@
+{
+	"name": "ls_googleapi",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "GoogleApi Linked Service",
+		"annotations": [],
+		"type": "RestService",
+		"typeProperties": {
+			"url": "https://newsapi.org/v2/",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Anonymous"
+		}
+	}
+}

@@ -1,0 +1,9 @@
+{
+	"name": "adf-mini-project-krb",
+	"location": "northeurope",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "3874b0cf-063a-4125-83dc-9464e6d2c975",
+		"tenantId": "c670b60d-c4c7-4dec-8c1f-ac0da3e72bee"
+	}
+}

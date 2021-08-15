@@ -1,0 +1,41 @@
+{
+	"name": "df_googlenews_raw_processed_json",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ds_dst_googlenews_blob",
+						"type": "DatasetReference"
+					},
+					"name": "SourceGoogleNewsJson"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_dst_googlenews_blob_processed",
+						"type": "DatasetReference"
+					},
+					"name": "DestGoogleNewsProcessed"
+				}
+			],
+			"transformations": [
+				{
+					"name": "FlattenJson"
+				},
+				{
+					"name": "SurrogateKeyId"
+				},
+				{
+					"name": "DerivedColumnSearch"
+				},
+				{
+					"name": "SelectColumnsOrder"
+				}
+			],
+			"script": "source(output(\n\t\tstatus as string,\n\t\ttotalResults as string,\n\t\tarticles as (source as (id as string, name as string), author as string, title as string, description as string, url as string, urlToImage as string, publishedAt as string, content as string)[]\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tdocumentForm: 'documentPerLine',\n\tpartitionBy('hash', 1)) ~> SourceGoogleNewsJson\nSourceGoogleNewsJson foldDown(unroll(articles),\n\tmapColumn(\n\t\ttitle = articles.title,\n\t\tdescription = articles.description,\n\t\turl = articles.url\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> FlattenJson\nFlattenJson keyGenerate(output(Id as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> SurrogateKeyId\nSurrogateKeyId derive({@search.action} = \"upload\",\n\t\tId = toString(Id),\n\tpartitionBy('hash', 1)) ~> DerivedColumnSearch\nDerivedColumnSearch select(mapColumn(\n\t\t{@search.action},\n\t\tId,\n\t\ttitle,\n\t\tdescription,\n\t\turl\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsOrder\nSelectColumnsOrder sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['googlenews_processed.json'],\n\tumask: 0022,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tpartitionBy('hash', 1)) ~> DestGoogleNewsProcessed"
+		}
+	}
+}
