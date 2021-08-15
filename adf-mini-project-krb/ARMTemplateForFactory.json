@@ -1,0 +1,783 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-mini-project-krb"
+		},
+		"ls_AzDatabricks_cognitivesearch_accessToken": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accessToken' of 'ls_AzDatabricks_cognitivesearch'"
+		},
+		"ls_adlsgen2_blob_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'ls_adlsgen2_blob'"
+		},
+		"ls_adlsgen2_blob_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://adlsgen2miniprojectkrb.dfs.core.windows.net"
+		},
+		"ls_googleapi_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://newsapi.org/v2/"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/Pl_for_testing_branch')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Wait Branch to create",
+				"activities": [
+					{
+						"name": "Wait",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 5
+						}
+					}
+				],
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_googlenews_api_call_v1')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "CopyApiNewstoBlob",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Variable apikey",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "RestSource",
+								"httpRequestTimeout": "00:01:40",
+								"requestInterval": "00.00:00:00.010",
+								"requestMethod": "GET"
+							},
+							"sink": {
+								"type": "JsonSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "JsonWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_src_googlenews",
+								"type": "DatasetReference",
+								"parameters": {
+									"url": "everything?q=covid&from=2021-07-20&sortBy=publishedAt&apiKey=",
+									"apikey": {
+										"value": "@variables('kv-apikey')",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_dst_googlenews_blob",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "DatflowtoTransform",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "CopyApiNewstoBlob",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "1.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_googlenews_raw_processed_json",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SourceGoogleNewsJson": {},
+									"DestGoogleNewsProcessed": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "Webactivity to Fetch KeyValut Secret",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": " https://kv-mini-project-krb.vault.azure.net/secrets/google-rest-api-key/f59ac1374bc846d3aa6783cbef09e6dd?api-version=7.0",
+							"method": "GET",
+							"headers": {},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://vault.azure.net"
+							}
+						}
+					},
+					{
+						"name": "Variable apikey",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Webactivity to Fetch KeyValut Secret",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "kv-apikey",
+							"value": {
+								"value": "@activity('Webactivity to Fetch KeyValut Secret').output.value",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"variables": {
+					"kv-apikey": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2021-08-14T10:31:13Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_src_googlenews')]",
+				"[concat(variables('factoryId'), '/datasets/ds_dst_googlenews_blob')]",
+				"[concat(variables('factoryId'), '/dataflows/df_googlenews_raw_processed_json')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_googlenews_api_call_v2')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "CopyApiNewstoBlob",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Variable apikey",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "RestSource",
+								"httpRequestTimeout": "00:01:40",
+								"requestInterval": "00.00:00:00.010",
+								"requestMethod": "GET"
+							},
+							"sink": {
+								"type": "JsonSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "JsonWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_src_googlenews",
+								"type": "DatasetReference",
+								"parameters": {
+									"url": "everything?q=covid&from=2021-07-20&sortBy=publishedAt&apiKey=",
+									"apikey": {
+										"value": "@variables('kv-apikey')",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_dst_googlenews_blob",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "DatflowtoTransform",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "CopyApiNewstoBlob",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "1.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_googlenews_raw_processed_json",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SourceGoogleNewsJson": {},
+									"DestGoogleNewsProcessed": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "Webactivity to Fetch KeyValut Secret",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": " https://kv-mini-project-krb.vault.azure.net/secrets/google-rest-api-key/f59ac1374bc846d3aa6783cbef09e6dd?api-version=7.0",
+							"method": "GET",
+							"headers": {},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://vault.azure.net"
+							}
+						}
+					},
+					{
+						"name": "Variable apikey",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Webactivity to Fetch KeyValut Secret",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "kv-apikey",
+							"value": {
+								"value": "@activity('Webactivity to Fetch KeyValut Secret').output.value",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"variables": {
+					"kv-apikey": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2021-08-14T10:31:13Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_src_googlenews')]",
+				"[concat(variables('factoryId'), '/datasets/ds_dst_googlenews_blob')]",
+				"[concat(variables('factoryId'), '/dataflows/df_googlenews_raw_processed_json')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_googlenews_api_call_v3')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "CopyApiNewstoBlob",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Variable apikey",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "RestSource",
+								"httpRequestTimeout": "00:01:40",
+								"requestInterval": "00.00:00:00.010",
+								"requestMethod": "GET"
+							},
+							"sink": {
+								"type": "JsonSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "JsonWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_src_googlenews",
+								"type": "DatasetReference",
+								"parameters": {
+									"url": "everything?q=covid&from=2021-07-20&sortBy=publishedAt&apiKey=",
+									"apikey": {
+										"value": "@variables('kv-apikey')",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_dst_googlenews_blob",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "DatflowtoTransform",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "CopyApiNewstoBlob",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "1.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_googlenews_raw_processed_json",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SourceGoogleNewsJson": {},
+									"DestGoogleNewsProcessed": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "Webactivity to Fetch KeyValut Secret",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": " https://kv-mini-project-krb.vault.azure.net/secrets/google-rest-api-key/f59ac1374bc846d3aa6783cbef09e6dd?api-version=7.0",
+							"method": "GET",
+							"headers": {},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://vault.azure.net"
+							}
+						}
+					},
+					{
+						"name": "Variable apikey",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Webactivity to Fetch KeyValut Secret",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "kv-apikey",
+							"value": {
+								"value": "@activity('Webactivity to Fetch KeyValut Secret').output.value",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "CognitiveSearchIdxUploadandSearch",
+						"type": "DatabricksNotebook",
+						"dependsOn": [
+							{
+								"activity": "DatflowtoTransform",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"notebookPath": "/Users/badri.kr@outlook.com/1_Azure_Cognitive_SearchV2"
+						},
+						"linkedServiceName": {
+							"referenceName": "ls_AzDatabricks_cognitivesearch",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"variables": {
+					"kv-apikey": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2021-08-14T12:51:07Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_src_googlenews')]",
+				"[concat(variables('factoryId'), '/datasets/ds_dst_googlenews_blob')]",
+				"[concat(variables('factoryId'), '/dataflows/df_googlenews_raw_processed_json')]",
+				"[concat(variables('factoryId'), '/linkedServices/ls_AzDatabricks_cognitivesearch')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_dst_googlenews_blob')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adlsgen2_blob",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "googlenews_raw.json",
+						"folderPath": "raw",
+						"fileSystem": "googlenews"
+					}
+				},
+				"schema": {
+					"type": "object",
+					"properties": {
+						"status": {
+							"type": "string"
+						},
+						"totalResults": {
+							"type": "integer"
+						},
+						"articles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"source": {
+										"type": "object",
+										"properties": {
+											"id": {
+												"type": "null"
+											},
+											"name": {
+												"type": "string"
+											}
+										}
+									},
+									"author": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"description": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"urlToImage": {
+										"type": "string"
+									},
+									"publishedAt": {
+										"type": "string"
+									},
+									"content": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adlsgen2_blob')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_dst_googlenews_blob_processed')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adlsgen2_blob",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileSystem": "googlenews"
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adlsgen2_blob')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_src_googlenews')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_googleapi",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"url": {
+						"type": "string"
+					},
+					"apikey": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "RestResource",
+				"typeProperties": {
+					"relativeUrl": {
+						"value": "@concat(dataset().url,dataset().apikey)",
+						"type": "Expression"
+					}
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_googleapi')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_AzDatabricks_cognitivesearch')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Linked Service for Databricks",
+				"annotations": [],
+				"type": "AzureDatabricks",
+				"typeProperties": {
+					"domain": "https://adb-2339679193640586.6.azuredatabricks.net",
+					"accessToken": {
+						"type": "SecureString",
+						"value": "[parameters('ls_AzDatabricks_cognitivesearch_accessToken')]"
+					},
+					"existingClusterId": "0813-161308-bandy958"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_adlsgen2_blob')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('ls_adlsgen2_blob_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('ls_adlsgen2_blob_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_googleapi')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "GoogleApi Linked Service",
+				"annotations": [],
+				"type": "RestService",
+				"typeProperties": {
+					"url": "[parameters('ls_googleapi_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/df_googlenews_raw_processed_json')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ds_dst_googlenews_blob",
+								"type": "DatasetReference"
+							},
+							"name": "SourceGoogleNewsJson"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ds_dst_googlenews_blob_processed",
+								"type": "DatasetReference"
+							},
+							"name": "DestGoogleNewsProcessed"
+						}
+					],
+					"transformations": [
+						{
+							"name": "FlattenJson"
+						},
+						{
+							"name": "SurrogateKeyId"
+						},
+						{
+							"name": "DerivedColumnSearch"
+						},
+						{
+							"name": "SelectColumnsOrder"
+						}
+					],
+					"script": "source(output(\n\t\tstatus as string,\n\t\ttotalResults as string,\n\t\tarticles as (source as (id as string, name as string), author as string, title as string, description as string, url as string, urlToImage as string, publishedAt as string, content as string)[]\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tdocumentForm: 'documentPerLine',\n\tpartitionBy('hash', 1)) ~> SourceGoogleNewsJson\nSourceGoogleNewsJson foldDown(unroll(articles),\n\tmapColumn(\n\t\ttitle = articles.title,\n\t\tdescription = articles.description,\n\t\turl = articles.url\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> FlattenJson\nFlattenJson keyGenerate(output(Id as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> SurrogateKeyId\nSurrogateKeyId derive({@search.action} = \"upload\",\n\t\tId = toString(Id),\n\tpartitionBy('hash', 1)) ~> DerivedColumnSearch\nDerivedColumnSearch select(mapColumn(\n\t\t{@search.action},\n\t\tId,\n\t\ttitle,\n\t\tdescription,\n\t\turl\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsOrder\nSelectColumnsOrder sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['googlenews_processed.json'],\n\tumask: 0022,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tpartitionBy('hash', 1)) ~> DestGoogleNewsProcessed"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_dst_googlenews_blob')]",
+				"[concat(variables('factoryId'), '/datasets/ds_dst_googlenews_blob_processed')]"
+			]
+		}
+	]
+}

@@ -1,0 +1,21 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adf-mini-project-krb"
+		},
+		"ls_AzDatabricks_cognitivesearch_accessToken": {
+			"value": ""
+		},
+		"ls_adlsgen2_blob_accountKey": {
+			"value": ""
+		},
+		"ls_adlsgen2_blob_properties_typeProperties_url": {
+			"value": "https://adlsgen2miniprojectkrb.dfs.core.windows.net"
+		},
+		"ls_googleapi_properties_typeProperties_url": {
+			"value": "https://newsapi.org/v2/"
+		}
+	}
+}
